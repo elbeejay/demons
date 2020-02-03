@@ -21,10 +21,11 @@ def DeformImage(StartingImage, Tx, Ty):
     # clamp ends
     TXNew[TXNew<0] = 0
     TYNew[TYNew<0] = 0
-    TXNew[TXNew>lilx] = lilx
-    TYNew[TYNew>lily] = lily
+    #TXNew[TXNew>lilx] = lilx
+    #TYNew[TYNew>lily] = lily
 
     # interpolate
-    OutputImage = interp2d(lilx,lily,StartingImage.T,kind='cubic')
+    Outputinterp = interp2d(lilx,lily,StartingImage.T,kind='cubic')
+    OutputImage = Outputinterp(lily,lilx)
 
     return OutputImage

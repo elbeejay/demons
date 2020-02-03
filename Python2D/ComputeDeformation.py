@@ -1,7 +1,9 @@
 import sys
 import numpy as np
-from scipy.misc import imresize
+from skimage.transform import resize
+from scipy.ndimage.filters import correlate
 import cv2
+from DeformImage import DeformImage
 
 def fspecial(shape=(3,3),sigma=0.5):
     """
@@ -96,33 +98,35 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
     # initial transformation field is smallest possible size
     initialScale = 1 * pyStepSize
     prevScale = initialScale
-    TxPrev = np.zeros( np.ceil( np.shape(I1)*initialScale ) )
-    TyPrev = np.zeros( np.ceil( np.shape(I1)*initialScale ) )
+
+    TxPrev = np.zeros( [int(np.ceil(np.shape(I1)[0]*initialScale)) , int(np.ceil(np.shape(I1)[1]*initialScale)) ] )
+    TyPrev = np.zeros( [int(np.ceil(np.shape(I1)[0]*initialScale)) , int(np.ceil(np.shape(I1)[1]*initialScale)) ] )
 
     # iterate over each pyramid
     for pyNum in range(1,NumPyramids+1):
+        print('pyNum: ' + str(pyNum))
 
         scaleFactor = pyNum * pyStepSize
 
         # increase size of smoothing filter
-        Hsmooth = fspecial(filterSize*scaleFactor,filterSigma*scaleFactor)
+        Hsmooth = fspecial([filterSize[0]*scaleFactor,filterSize[1]*scaleFactor],filterSigma*scaleFactor)
 
         # only needed if using extended demon force
         alpha = alphaInit / pyNum
 
         # resize images according to pyramid steps
-        I2 = imresize(I2, scaleFactor)
+        I2 = resize(I2, [round(np.shape(I2)[0]*scaleFactor),round(np.shape(I2)[1]*scaleFactor)])
         I2 = np.double(I2)
         out2 = np.zeros(I2.shape, np.double)
         S = cv2.normalize(I2, out2, 1.0, 0.0, cv2.NORM_MINMAX)
 
-        I1 = imresize(I1, scaleFactor)
+        I1 = resize(I1, [round(np.shape(I1)[0]*scaleFactor),round(np.shape(I1)[1]*scaleFactor)])
         I1 = np.double(I1)
         out1 = np.zeros(I1.shape, np.double)
         M = cv2.normalize(I1, out1, 1.0, 0.0, cv2.NORM_MINMAX)
 
         # compute MSE
-        prevMSE = np.abs(M-S)^2
+        prevMSE = np.abs(M-S)**2
         StartingImage = M
 
         # histogram match
@@ -133,8 +137,8 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
         # at the previous pyramid bilinearly interpolated to current size. The
         # magnitudes of the deformations needs to be scaled by the change in
         # scale too.
-        Tx = imresize(Txprev, np.shape(S))*scaleFactor/prevScale
-        Ty = imresize(Typrev, np.shape(S))*scaleFactor/prevScale
+        Tx = resize(TxPrev, np.shape(S))*scaleFactor/prevScale
+        Ty = resize(TyPrev, np.shape(S))*scaleFactor/prevScale
 
         M = DeformImage(StartingImage,Tx,Ty)
         prevScale = scaleFactor
@@ -142,28 +146,29 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
         [Sy,Sx] = np.gradient(S)
 
         for itt in range(1,MaxIter+1):
+            print('itt: ' + str(itt))
 
             # difference image between moving and static image
             Idiff = M - S
 
             if alpha == 0:
                 # default demon force (Thirion 1998)
-                Ux = -(Idiff*Sx) / ( (Sx^2 + Sy^2) + Idiff^2 )
-                Uy = -(Idiff*Sy) / ( (Sx^2 + Sy^2) + Idiff^2 )
+                Ux = -(Idiff*Sx) / ( (Sx**2 + Sy**2) + Idiff**2 )
+                Uy = -(Idiff*Sy) / ( (Sx**2 + Sy**2) + Idiff**2 )
             else:
                 # extended demon force. faster convergence but more unstable
                 # (Cachier 1999, He Wang 2005)
                 [My,Mx] = np.gradient(M)
-                Ux = -Idiff * ( (Sx/((Sx^2+Sy^2) + alpha^2 * Idiff^2) ) + (Mx/((Mx^2+My^2)+alpha^2 * Idiff^2)) )
-                Uy = -Idiff * ((Sy/((Sx^2+Sy^2)+alpha^2*Idiff^2))+(My/((Mx^2+My^2)+alpha^2*Idiff^2)))
+                Ux = -Idiff * ( (Sx/((Sx**2+Sy**2) + alpha**2 * Idiff**2) ) + (Mx/((Mx**2+My**2)+alpha**2 * Idiff**2)) )
+                Uy = -Idiff * ((Sy/((Sx**2+Sy**2)+alpha**2*Idiff**2))+(My/((Mx**2+My**2)+alpha**2*Idiff**2)))
 
             # when divided by zero
             Ux[np.isnan(Ux)] = 0
             Uy[np.isnan(Uy)] = 0
 
             # smooth the transformation field
-            Uxs = 3*imfilter(Ux,Hsmooth)
-            Uys = 3*imfilter(Uy,Hsmooth)
+            Uxs = 3*correlate(Ux,Hsmooth)
+            Uys = 3*correlate(Uy,Hsmooth)
 
             # add new transformation field to the total transformation field
             Tx = Tx + Uxs
@@ -171,26 +176,36 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
 
             M = DeformImage(StartingImage,Tx,Ty)
 
-            D = np.abs(M-S)^2
+            D = np.abs(M-S)**2
             [sA,sB] = np.shape(S)
             MSE = np.sum( D[:]/(sA*sB) )
 
             if MSETolerance > 0:
                 # break if MSE is increasing
-                if MSE > prevMSE*MSETolerance:
+                if MSE > np.sum(prevMSE)*MSETolerance:
                     print('Pyramid Level: ' + str(pyNum) + ' converged after ' + str(itt) + ' iterations.')
                     sys.exit()
+                else:
+                    pass
 
                 # break if MSE isn't really decreasing much
-                if np.abs(prevMSE-MSE)/MSE < MSEConvergenceCriterion:
+                if np.abs(np.sum(prevMSE)-MSE)/MSE < MSEConvergenceCriterion:
                     print('Pyramid Level: ' + str(pyNum) + ' converged after ' + str(itt) + ' iterations.')
                     sys.exit()
+                else:
+                    pass
+
+            else:
+                pass
 
             # update MSE
             prevMSE = MSE
 
             if plotFreq > 0:
                 # add plot stuff here
+                pass
+            else:
+                pass
 
         # propogate transformation to next pyramid
         TxPrev = Tx
