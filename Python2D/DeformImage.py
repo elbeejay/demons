@@ -9,14 +9,15 @@ def DeformImage(StartingImage, Tx, Ty):
     - Converted into Python by J. Hariharan (jayaram.hariharan@utexas.edu)
       Feb 1 2020
     """
+
     # create interpolation grid
     lilx = np.arange(0,np.shape(StartingImage)[0],1)
     lily = np.arange(0,np.shape(StartingImage)[1],1)
     [X,Y] = np.meshgrid(lilx, lily)
 
     # transformed coordinates
-    TXNew = X.T + Tx
-    TYNew = Y.T + Ty
+    TXNew = X + Tx.T
+    TYNew = Y + Ty.T
 
     # clamp ends
     TXNew[TXNew<0] = 0
@@ -25,7 +26,7 @@ def DeformImage(StartingImage, Tx, Ty):
     #TYNew[TYNew>lily] = lily
 
     # interpolate
-    Outputinterp = interp2d(lilx,lily,StartingImage.T,kind='cubic')
+    Outputinterp = interp2d(lily,lilx,StartingImage,kind='cubic')
     OutputImage = Outputinterp(lily,lilx)
 
     return OutputImage

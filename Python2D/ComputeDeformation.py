@@ -115,12 +115,13 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
         alpha = alphaInit / pyNum
 
         # resize images according to pyramid steps
-        I2 = resize(I2, [round(np.shape(I2)[0]*scaleFactor),round(np.shape(I2)[1]*scaleFactor)])
+        ### S and M definition currently not same as MATLAB version !!!
+        I2 = resize(I2, [np.ceil(np.shape(I2)[0]*scaleFactor),np.ceil(np.shape(I2)[1]*scaleFactor)])
         I2 = np.double(I2)
         out2 = np.zeros(I2.shape, np.double)
         S = cv2.normalize(I2, out2, 1.0, 0.0, cv2.NORM_MINMAX)
 
-        I1 = resize(I1, [round(np.shape(I1)[0]*scaleFactor),round(np.shape(I1)[1]*scaleFactor)])
+        I1 = resize(I1, [np.ceil(np.shape(I1)[0]*scaleFactor),np.ceil(np.shape(I1)[1]*scaleFactor)])
         I1 = np.double(I1)
         out1 = np.zeros(I1.shape, np.double)
         M = cv2.normalize(I1, out1, 1.0, 0.0, cv2.NORM_MINMAX)
@@ -130,7 +131,7 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
         StartingImage = M
 
         # histogram match
-        M = hist_match(M, S)
+        # M = hist_match(M, S)
 
         # transformation fields:
         # transformation field for current pyramid is the transformation field
@@ -149,6 +150,7 @@ def ComputeDeformation(I1,I2,MaxIter,NumPyramids,
             print('itt: ' + str(itt))
 
             # difference image between moving and static image
+            import pdb; pdb.set_trace()
             Idiff = M - S
 
             if alpha == 0:
